@@ -11,14 +11,14 @@ identity kitty;
 // Setup initial account
 identity alice;
 let args = encode fake.__init_args(
-	vec { alice; bob },
+	vec { alice; bob; kitty; },
 	2
 );
 let MultisigWallet = install(wasm, args, null);
 
 // TestDeploy
 call MultisigWallet.getApprovers();
-assert _ == vec { alice; bob; };
+assert _ == vec { alice; bob; kitty; };
 
 identity alice;
 call MultisigWallet.createOpt(
@@ -38,29 +38,56 @@ identity alice;
 call MultisigWallet.createProposal(
 	"TestProposal",
 	currentCanisiterId,
-	100000000000,
+	10000,
 	variant { Limit },
 	2
 );
 call MultisigWallet.getProposals();
-let res = _[0];
-assert res.executed == false;
-assert res.proposalType == variant { Limit };
+let proposalId = _[0].id;
+assert _[0].votesYes == (0 : nat);
+assert _[0].votesNo == (0: nat);
+assert _[0].proposalType == variant { Limit };
 
-// TestVote
+// TestVote(Yes)
 identity alice;
-call MultisigWallet.vote(res.id);
+call MultisigWallet.vote(proposalId, variant { yes });
 identity bob;
-call MultisigWallet.vote(res.id);
+call MultisigWallet.vote(proposalId, variant { yes });
 call MultisigWallet.getProposals();
-let proposals = _;
-assert proposals[0].executed == false;
-assert proposals[0].votes == (2 : nat);
+assert _[0].state ==  variant { accepted };
+assert _[0].votesYes == (2 : nat);
 
 // TestExecute
 identity alice;
-call MultisigWallet.executeProposal(res.id);
-assert _.err == "cannot execute proposal before end date";
+call MultisigWallet.executeProposal(proposalId);
 call MultisigWallet.getProposals();
-assert _[0].executed == false;
-assert _[0].votes == (2 : nat);
+assert _[0].state == variant { succeeded };
+assert _[0].votesYes == (2 : nat);
+
+call MultisigWallet.executeProposal(proposalId);
+assert _.err == "Cannot execute proposal already executed";
+
+// ==================new TestCase=================
+identity alice;
+call MultisigWallet.createProposal(
+	"TestProposal2",
+	currentCanisiterId,
+	10000,
+	variant { Limit },
+	2
+);
+call MultisigWallet.getProposals();
+let proposalId = _[1].id;
+
+identity alice;
+call MultisigWallet.vote(proposalId, variant { no });
+identity bob;
+call MultisigWallet.vote(proposalId, variant { no });
+
+call MultisigWallet.getProposals();
+assert _[1].state ==  variant { rejected };
+assert _[1].votesNo == (2 : nat);
+
+call MultisigWallet.executeProposal(proposalId);
+assert _.err == "Only the accepted state can be executed";
+

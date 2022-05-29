@@ -18,12 +18,33 @@ module {
   public type Proposal = {
     id: ID;
     name: Text;
-    votes: Nat;
 		quorum: Nat;
 		canisterId: Canister;
 		proposalType: ProposalType;
     end: Time.Time;
-    executed: Bool;
+		votesYes: Nat;
+		votesNo: Nat;
+		state: ProposalState;
+  };
+
+	public type Vote = {
+		#yes;
+		#no;
+	};
+
+	public type ProposalState = {
+      // A failure occurred while executing the proposal
+      #failed : Text;
+      // The proposal is open for voting
+      #open;
+      // The proposal is currently being executed
+      #executing;
+      // Enough "no" votes have been cast to reject the proposal, and it will not be executed
+      #rejected;
+      // The proposal has been successfully executed
+      #succeeded;
+      // Enough "yes" votes have been cast to accept the proposal, and it will soon be executed
+      #accepted;
   };
 
   public type ProposalType = {

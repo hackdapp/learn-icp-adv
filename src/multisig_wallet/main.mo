@@ -180,18 +180,19 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 		let proposal : Types.Proposal = {
 			id = nextProposalId;
 			name = name;
-			votes = 0;
 			quorum = quorum;
 			canisterId = canisterId;
 			proposalType = proposalType;
 			end = Time.now() + voteTime;
-			executed = false;
+			votesYes = 0;
+			votesNo = 0;
+			state = #open;
 		};
 		saveOrUpdateProposal(nextProposalId, proposal);
 		#ok(nextProposalId)
   };
 
-  public shared(msg) func vote(proposalId: Nat) : async Types.Result<(Types.Proposal), Text>{
+  public shared(msg) func vote(proposalId: Nat, vote: Types.Vote) : async Types.Result<(Types.Proposal), Text>{
 		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
 			case null { return #err "only approver allowed" };
 			case (_) {}
@@ -200,15 +201,31 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 		switch(getProposalById(proposalId)){
         case null { return #err("No proposal with ID  exists") };
 				case (?proposal) {
+					var votesYes = proposal.votesYes;
+					var votesNo = proposal.votesNo;
+					switch(vote) {
+						case (#yes) { votesYes += 1; };
+						case (#no) { votesNo += 1; };
+					};
+
+					var state = proposal.state;
+					if (votesYes >= proposal.quorum) {
+							state := #accepted;
+					};
+					if (votesNo >= proposal.quorum) {
+							state := #rejected;
+					};
+
 					let updatedProposal: Types.Proposal = {
 							id = proposal.id;
 							name = proposal.name;
-							votes = proposal.votes + 1;
 							quorum = proposal.quorum;
 							canisterId = proposal.canisterId;
 							proposalType = proposal.proposalType;
 							end = proposal.end;
-							executed = proposal.executed;
+							votesYes;
+							votesNo;
+							state
 					};
 					saveOrUpdateProposal(proposal.id, updatedProposal);
 					#ok(updatedProposal);
@@ -225,20 +242,21 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 		switch(getProposalById(proposeId)){
 			case null { return #err "No proposal with ID  exists" };
 			case (?proposal) {
-				if (proposal.end > Time.now()) { return #err("cannot execute proposal before end date"); };
-				if (proposal.executed == true) { return #err("cannot execute proposal already executed"); };
-				if (proposal.votes < proposal.quorum) {return #err("cannot execute proposal with votes # below quorum"); };
+				if (proposal.end > Time.now()) { return #err("Cannot execute proposal before end date"); };
+				if (proposal.state == #succeeded) { return #err("Cannot execute proposal already executed"); };
+				if (proposal.state != #accepted) { return #err("Only the accepted state can be executed"); };
 
 				// todo do some stuff
 				let updatedProposal: Types.Proposal = {
 					id = proposal.id;
 					name = proposal.name;
-					votes = proposal.votes;
 					quorum = proposal.quorum;
 					canisterId = proposal.canisterId;
 					proposalType = proposal.proposalType;
 					end = proposal.end;
-					executed = true;
+					votesYes = proposal.votesYes;
+					votesNo = proposal.votesNo;
+					state = #succeeded;
 				};
 				saveOrUpdateProposal(proposal.id, updatedProposal);
 				#ok();

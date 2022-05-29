@@ -15,6 +15,12 @@
 3.在调用 IC Management Canister 的时候，给出足够的 cycle。
 
 ## 测试用例脚本
+
+```
+dfx identity new Bob; dfx identity use Bob; export BOB=$(dfx identity get-principal);
+dfx identity new Alice; dfx identity use Alice; export ALICE=$(dfx identity get-principal);
+```
+
 ### 1.1 多签用例
 ```
 ic-repl ./tests/multisig.test.sh
