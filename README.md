@@ -14,7 +14,18 @@
 -解除对某个指定的 canister 限权。
 3.在调用 IC Management Canister 的时候，给出足够的 cycle。
 
+## 测试用例脚本
+### 1.1 多签用例
+```
+ic-repl ./tests/multisig.test.sh
+```
 
+### 1.2 提案用例
+```
+ic-repl ./tests/proposal.test.sh
+```
+
+----
 
 使用:
 
@@ -40,5 +51,4 @@ dfx canister call multisig_wallet approve "(0)"
 dfx identity use registered_owner
 dfx canister call multisig_wallet approve "(0)"
 ```
-4)
 
