@@ -1,140 +1,250 @@
 import Array "mo:base/Array";
-import Error "mo:base/Error";
-import Buffer "mo:base/Buffer";
-import Debug "mo:base/Debug";
 import Blob "mo:base/Blob";
-import M "mo:base/HashMap";
-import Text "mo:base/Text";
+import Cycles "mo:base/ExperimentalCycles";
+import Debug "mo:base/Debug";
+import Error "mo:base/Error";
+import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Principal "mo:base/Principal";
-import Cycles "mo:base/ExperimentalCycles";
+import Time "mo:base/Time";
+import Trie "mo:base/Trie";
 
 import IC "./ic";
 import Types "./types";
 
 actor class(_approvers: [Principal], _quorum : Nat) = self {
-	private let CYCLE_LIMIT = 2_000_000_000_000;
-	private let ic : IC.Self = actor("aaaaa-aa");
+	let CYCLE_LIMIT = 1_000_000_000_000;
+	let ic : IC.Self = actor("aaaaa-aa");
 
-  public type Canister = Types.Canister;
-  public type ID = Types.ID;
-  public type Opt = Types.Opt;
-  public type OptType = Types.OptType;
+	stable var quorum: Nat = _quorum;
+	stable var nextOptId = 0;
+	stable var approvers: [Principal] = _approvers;
+  stable var opts: Trie.Trie<Types.ID, Types.Opt> = Trie.empty<Types.ID, Types.Opt>();
+	stable var approvals: Trie.Trie<Principal, Trie.Trie<Types.ID, Bool>> = Trie.empty<Principal, Trie.Trie<Types.ID, Bool>>();
 
-	private var quorum: Nat = _quorum;
-	private var approvers: [Principal] = _approvers;
-  private var opts: Buffer.Buffer<Opt> = Buffer.Buffer<Opt>(0);
-	private var approvals: M.HashMap<Principal, M.HashMap<Text, Bool>> = M.HashMap<Principal, M.HashMap<Text, Bool>>(10, Principal.equal, Principal.hash);
+  stable var nextProposalId = 0;
+  stable var proposals: Trie.Trie<Nat, Types.Proposal> = Trie.empty<Nat, Types.Proposal>();
+	var votes: Trie.Trie<Principal, Trie.Trie<Types.ID, Bool>> = Trie.empty<Principal, Trie.Trie<Types.ID, Bool>>();
 
-	public query func getApprovers() : async [Principal] {
-    approvers
-  };
-
-	public query func getOpts() : async [Opt] {
-    opts.toArray()
-  };
-
-  public shared(msg) func createOpt(optType: OptType, canisterId: ?Canister, wasmCode: ?Blob) : () {
-		// Debug.print(debug_show("principal: ", msg.caller));
-		// Debug.print(debug_show("approve check: ", Option.isSome(Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) }))));
-		assert(Option.isSome(Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })));
-
-		let opt: Opt = {
-			id = opts.size();
-			wasmCode;
-			optType;
-			canisterId;
-			approvals = 0;
-			sent = false;
-		};
-		opts.add(opt);
+	func getOptsById(id: Types.ID) : ?Types.Opt = Trie.get(opts, Types.buildKey(id), Nat.equal);
+	func saveOrUpdateOpt(id: Nat, opt: Types.Opt) {
+		opts := Trie.put(opts, Types.buildKey(id), Nat.equal, opt).0;
 	};
 
-	public shared(msg) func approve(id: Nat): async Opt {
-		assert(Option.isNull(?opts.get(id)) or opts.get(id).sent == false);
-		Debug.print(debug_show("approve check: ", Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })));
-		assert(Option.isSome(Array.find(approvers, func(a: Principal) : Bool { a == msg.caller})));
+	func getProposalById(id: Nat) : ?Types.Proposal = Trie.get(proposals, Types.buildKey(id), Nat.equal);
+	func saveOrUpdateProposal(id: Nat, proposal: Types.Proposal) {
+		proposals := Trie.put(proposals, Types.buildKey(id), Nat.equal, proposal).0;
+	};
 
-		let userApprove = switch(approvals.get(msg.caller)) {
-			case null {
-				var map =	M.HashMap<Text, Bool>(10, Text.equal, Text.hash);
-				map.put(Nat.toText(id), true);
-				approvals.put(msg.caller, map);
-				approvals
-			};
-			case (?userVal) {
-				let map: M.HashMap<Text, Bool> = switch(userVal.get(Nat.toText(id))){
-					case null {
-						userVal
-					};
+	func getApprovalsById(act: Principal, id: Types.ID): Bool {
+		switch(Trie.get(approvals, Types.buildPrincipalKey(act), Principal.equal)) {
+			case null false;
+			case (?vals) {
+				switch(Trie.get(vals, Types.buildKey(id), Nat.equal)) {
+					case null false;
 					case (?val) {
-						assert(val == false);
-						userVal
+						val
 					}
 				};
-				map.put(Nat.toText(id), true);
-				approvals.put(msg.caller, map);
-				approvals
+			};
+		};
+	};
+
+	func saveOrUpdateApprovals(act: Principal, id: Types.ID, isApprove: Bool) {
+		switch(Trie.get(approvals, Types.buildPrincipalKey(act), Principal.equal)) {
+			case null {
+				let val = Trie.put(Trie.empty<Types.ID, Bool>(), Types.buildKey(id), Nat.equal, false).0;
+				approvals := Trie.put(approvals, Types.buildPrincipalKey(act), Principal.equal, val).0;
+			};
+			case (?vals){
+				let val = Trie.put(vals, Types.buildKey(id), Nat.equal, isApprove).0;
+				approvals := Trie.put(approvals, Types.buildPrincipalKey(act), Principal.equal, val).0;
 			}
 		};
+	};
 
-		var opt: Opt = Types.buildAddApprove(opts.get(id));
-		opts.put(id, opt);
-		if (opt.approvals >= quorum) {
-			Debug.print(debug_show(msg.caller, "OptType: ", opt.optType, "ID: ", opt.id));
-				switch (opt.optType) {
-					case (#CreateCanister) {
-						Cycles.add(CYCLE_LIMIT);
-						let settings : IC.canister_settings =
-							{
-								freezing_threshold = null;
-								controllers = ?[Principal.fromActor(self)];
-								memory_allocation = null;
-								compute_allocation = null;
+	public query func getApprovers() : async [Principal] {
+    approvers;
+  };
+
+	public query func getOpts() : async [Types.Opt] {
+		Iter.toArray(Iter.map(Trie.iter(opts), func(kv: (Nat, Types.Opt)) : Types.Opt = kv.1));
+  };
+
+  public shared(msg) func createOpt(optType: Types.OptType, canisterId: ?Types.Canister, wasmCode: ?Blob) : async Types.Result<(Types.Opt), Text> {
+		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
+			case null { #err "only approver allowed" };
+			case (?_) {
+				nextOptId += 1;
+				let opt: Types.Opt = {
+					id = nextOptId;
+					wasmCode;
+					optType;
+					canisterId;
+					approvals = 0;
+					sent = false;
+				};
+				saveOrUpdateOpt(nextOptId, opt);
+				#ok(opt)
+			}
+		};
+	};
+
+		public shared(msg) func approve(id: Nat): async Types.Result<Types.Opt, Text> {
+			switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
+				case null { return #err "only approver allowed" };
+				case (_) {}
+			};
+
+			switch(getOptsById(id)){
+				case null { return #err "Opt does not exist" };
+				case (?opt) {
+					if( opt.sent == true ) return #err "Opt already running";
+
+					var updateOpt: Types.Opt = Types.buildAddApprove(opt);
+					saveOrUpdateApprovals(msg.caller, id, true);
+					if (updateOpt.approvals >= quorum) {
+						switch (opt.optType) {
+							case (#CreateCanister) {
+								Cycles.add(CYCLE_LIMIT);
+								let settings : IC.canister_settings =
+									{
+										freezing_threshold = null;
+										controllers = ?[Principal.fromActor(self)];
+										memory_allocation = null;
+										compute_allocation = null;
+									};
+
+								let result = await ic.create_canister({settings = ?settings});
+								updateOpt := Types.buildAddCanisterId(updateOpt, ?result.canister_id);
 							};
 
-						let result = await ic.create_canister({settings = ?settings});
+							case (#InstallCode) {
+								await ic.install_code({
+									arg = [];
+									wasm_module = Blob.toArray(Option.unwrap(opt.wasmCode));
+									mode = #install;
+									canister_id = Option.unwrap(opt.canisterId);
+								});
+							};
 
-						opt := Types.buildAddCanisterId(opt, ?result.canister_id);
-					};
+							case (#UninstallCode) {
+								await ic.uninstall_code({
+									canister_id = Option.unwrap(opt.canisterId);
+								});
+							};
 
-					case (#InstallCode) {
-						await ic.install_code({
-							arg = [];
-							wasm_module = Blob.toArray(Option.unwrap(opt.wasmCode));
-							mode = #install;
-							canister_id = Option.unwrap(opt.canisterId);
-						});
-					};
+							case (#StartCanister) {
+								await ic.start_canister({
+									canister_id = Option.unwrap(opt.canisterId);
+								});
+							};
 
-					case (#UninstallCode) {
-						await ic.uninstall_code({
-							canister_id = Option.unwrap(opt.canisterId);
-						});
-					};
+							case (#StopCanister) {
+								await ic.stop_canister({
+									canister_id = Option.unwrap(opt.canisterId);
+								});
+							};
 
-					case (#StartCanister) {
-						await ic.start_canister({
-							canister_id = Option.unwrap(opt.canisterId);
-						});
+							case (#DeleteCanister) {
+								await ic.delete_canister({
+									canister_id = Option.unwrap(opt.canisterId);
+								});
+							};
+						};
+						updateOpt := Types.buildConfirmApprove(updateOpt);
 					};
+					saveOrUpdateOpt(id, updateOpt);
+					#ok(updateOpt)
+				};
+			};
+	};
 
-					case (#StopCanister) {
-						await ic.stop_canister({
-							canister_id = Option.unwrap(opt.canisterId);
-						});
-					};
 
-					case (#DeleteCanister) {
-						await ic.delete_canister({
-							canister_id = Option.unwrap(opt.canisterId);
-						});
-					};
-				}; // switch
-				opt := Types.buildConfirmApprove(opt);
-				opts.put(id, opt);
+	public query func getProposals() : async [Types.Proposal] {
+		Iter.toArray(Iter.map(Trie.iter(proposals), func (kv : (Nat, Types.Proposal)) : Types.Proposal = kv.1))
+	};
+
+  public shared(msg) func createProposal(name: Text, canisterId: Types.Canister, voteTime: Time.Time, proposalType: Types.ProposalType, quorum: Nat): async Types.Result<Types.ID, Text> {
+		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
+			case null { return #err "only approver allowed" };
+			case (_) {};
 		};
-		opts.get(id)
-	}
+		// switch (Array.find(getProposals(), func(val : Types.Proposal) : Bool { Types.Canister.equal(val.canisterId, canisterId)} )) {
+		// 	case null { return #err "canister not exist" };
+		// 	case (_) {};
+		// };
+
+		nextProposalId += 1;
+		let proposal : Types.Proposal = {
+			id = nextProposalId;
+			name = name;
+			votes = 0;
+			quorum = quorum;
+			canisterId = canisterId;
+			proposalType = proposalType;
+			end = Time.now() + voteTime;
+			executed = false;
+		};
+		saveOrUpdateProposal(nextProposalId, proposal);
+		#ok(nextProposalId)
+  };
+
+  public shared(msg) func vote(proposalId: Nat) : async Types.Result<(Types.Proposal), Text>{
+		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
+			case null { return #err "only approver allowed" };
+			case (_) {}
+		};
+
+		switch(getProposalById(proposalId)){
+        case null { return #err("No proposal with ID  exists") };
+				case (?proposal) {
+					let updatedProposal: Types.Proposal = {
+							id = proposal.id;
+							name = proposal.name;
+							votes = proposal.votes + 1;
+							quorum = proposal.quorum;
+							canisterId = proposal.canisterId;
+							proposalType = proposal.proposalType;
+							end = proposal.end;
+							executed = proposal.executed;
+					};
+					saveOrUpdateProposal(proposal.id, updatedProposal);
+					#ok(updatedProposal);
+				};
+		};
+  };
+
+  public shared(msg) func executeProposal(proposeId: Types.ID): async Types.Result<(), Text> {
+		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
+			case null { return #err "only approver allowed" };
+			case (_) {};
+		};
+
+		switch(getProposalById(proposeId)){
+			case null { return #err "No proposal with ID  exists" };
+			case (?proposal) {
+				if (proposal.end > Time.now()) { return #err("cannot execute proposal before end date"); };
+				if (proposal.executed == true) { return #err("cannot execute proposal already executed"); };
+				if (proposal.votes < proposal.quorum) {return #err("cannot execute proposal with votes # below quorum"); };
+
+				// todo do some stuff
+				let updatedProposal: Types.Proposal = {
+					id = proposal.id;
+					name = proposal.name;
+					votes = proposal.votes;
+					quorum = proposal.quorum;
+					canisterId = proposal.canisterId;
+					proposalType = proposal.proposalType;
+					end = proposal.end;
+					executed = true;
+				};
+				saveOrUpdateProposal(proposal.id, updatedProposal);
+				#ok();
+			};
+		};
+  };
+
+
 }

@@ -2,10 +2,34 @@ import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import Principal "mo:base/Principal";
 import M "mo:base/HashMap";
+import Time "mo:base/Time";
+import Bool "mo:base/Bool";
+import Text "mo:base/Text";
+import Trie "mo:base/Trie";
+import Int "mo:base/Int";
+import Nat "mo:base/Nat";
+import Result "mo:base/Result";
 
 module {
+	public type Result<T, E> = Result.Result<T, E>;
 	public type Canister = Principal;
 	public type ID = Nat;
+
+  public type Proposal = {
+    id: ID;
+    name: Text;
+    votes: Nat;
+		quorum: Nat;
+		canisterId: Canister;
+		proposalType: ProposalType;
+    end: Time.Time;
+    executed: Bool;
+  };
+
+  public type ProposalType = {
+    #Limit;
+    #UnLimit;
+  };
 
 	public type OptType = {
 		#InstallCode;
@@ -25,6 +49,9 @@ module {
 		sent: Bool;
 	};
 
+  public func buildKey(t: ID) : Trie.Key<ID> = { key = t; hash = Int.hash t };
+	public func buildPrincipalKey(t: Principal): Trie.Key<Principal> = { key = t; hash = Principal.hash t };
+
 	public func buildAddApprove(opt: Opt) : Opt {
 		{
 			id = opt.id;
@@ -36,7 +63,7 @@ module {
 		}
 	};
 
-		public func buildAddCanisterId(opt: Opt, canisterId: ?Canister) : Opt {
+	public func buildAddCanisterId(opt: Opt, canisterId: ?Canister) : Opt {
 		{
 			id = opt.id;
 			wasmCode = opt.wasmCode;
@@ -57,8 +84,4 @@ module {
 			sent = true; // update confirm status
 		}
 	}
-
-	// public func buildUserApproveNum(approvals: M.HashMap<Principal, M.HashMap<ID, Bool>>): M.HashMap<Principal, M.HashMap<ID, Bool>>{
-
-	// }
 }
