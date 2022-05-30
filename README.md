@@ -58,3 +58,17 @@ dfx identity use registered_owner
 dfx canister call multisig_wallet approve "(0)"
 ```
 
+```
+dfx canister --network ic call multisig_wallet createProposal "(\"TestProposal-001\", (principal \"fupft-7iaaa-aaaal-qa4eq-cai\"), 1000, variant {\"Limit\"}, 2)"
+
+dfx identity use default
+dfx canister --network ic call multisig_wallet vote "(1, variant{\"yes\"})"
+
+dfx identity use registered_owner
+dfx canister --network ic call multisig_wallet vote "(1, variant{\"yes\"})"
+
+dfx canister --network ic call multisig_wallet executeProposal "(1)"
+
+dfx canister --network ic call multisig_wallet getProposals "()"
+```
+
