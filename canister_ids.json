@@ -1,5 +1,8 @@
 {
   "multisig_wallet": {
     "ic": "ftodh-sqaaa-aaaal-qa4ea-cai"
+  },
+  "multisig_wallet_assets": {
+    "ic": "a2sip-yqaaa-aaaal-qa4ya-cai"
   }
 }

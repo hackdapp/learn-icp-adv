@@ -17,15 +17,16 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 	let CYCLE_LIMIT = 1_000_000_000_000;
 	let ic : IC.Self = actor("aaaaa-aa");
 
-	stable var quorum: Nat = _quorum;
-	stable var nextOptId = 0;
-	stable var approvers: [Principal] = _approvers;
-  stable var opts: Trie.Trie<Types.ID, Types.Opt> = Trie.empty<Types.ID, Types.Opt>();
-	stable var approvals: Trie.Trie<Principal, Trie.Trie<Types.ID, Bool>> = Trie.empty<Principal, Trie.Trie<Types.ID, Bool>>();
+	stable var quorum: Nat = _quorum; // 多签阈值N
+	stable var nextOptId = 0;					// 常规操作自增ID
+	stable var approvers: [Principal] = _approvers; // 多签成员列表集合
+  stable var opts: Trie.Trie<Types.ID, Types.Opt> = Trie.empty<Types.ID, Types.Opt>(); // 常规操作列表集合
+	stable var approvals: Trie.Trie<Principal, Trie.Trie<Types.ID, Bool>> = Trie.empty<Principal, Trie.Trie<Types.ID, Bool>>(); // 多签成员审核状态列表集合
 
-  stable var nextProposalId = 0;
+  stable var nextProposalId = 0; // 议案自增ID
   stable var proposals: Trie.Trie<Nat, Types.Proposal> = Trie.empty<Nat, Types.Proposal>();
-	var votes: Trie.Trie<Principal, Trie.Trie<Types.ID, Bool>> = Trie.empty<Principal, Trie.Trie<Types.ID, Bool>>();
+	stable var limitCanisters: Trie.Trie<Principal, Bool> = Trie.empty<Principal, Bool>();
+	// var votes: Trie.Trie<Principal, Trie.Trie<Types.ID, Bool>> = Trie.empty<Principal, Trie.Trie<Types.ID, Bool>>();
 
 	func getOptsById(id: Types.ID) : ?Types.Opt = Trie.get(opts, Types.buildKey(id), Nat.equal);
 	func saveOrUpdateOpt(id: Nat, opt: Types.Opt) {
@@ -35,6 +36,23 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 	func getProposalById(id: Nat) : ?Types.Proposal = Trie.get(proposals, Types.buildKey(id), Nat.equal);
 	func saveOrUpdateProposal(id: Nat, proposal: Types.Proposal) {
 		proposals := Trie.put(proposals, Types.buildKey(id), Nat.equal, proposal).0;
+	};
+
+	func isLimitCanister(canisterId: ?Principal) : Bool {
+		switch (canisterId) {
+			case null false;
+			case (?val) {
+				switch(Trie.get(limitCanisters, Types.buildPrincipalKey(val), Principal.equal)) {
+					case null false;
+					case (?isLimit){
+						isLimit
+					}
+				};
+			};
+		};
+	};
+	func saveLimitCanister(canisterId: Types.Canister, isLimit: Bool) {
+		limitCanisters := Trie.put(limitCanisters, Types.buildPrincipalKey(canisterId), Principal.equal, isLimit).0;
 	};
 
 	func getApprovalsById(act: Principal, id: Types.ID): Bool {
@@ -64,6 +82,62 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 		};
 	};
 
+	func executeOperation(opt: Types.Opt): async ?Types.Canister {
+		switch (opt.optType) {
+			case (#CreateCanister) {
+				Cycles.add(CYCLE_LIMIT);
+				let settings : IC.canister_settings =
+					{
+						freezing_threshold = null;
+						controllers = ?[Principal.fromActor(self)];
+						memory_allocation = null;
+						compute_allocation = null;
+					};
+
+				let result = await ic.create_canister({settings = ?settings});
+				?result.canister_id
+			};
+
+			case (#InstallCode) {
+				// await ic.install_code({
+				// 	arg = [];
+				// 	wasm_module = Blob.toArray(Option.unwrap(opt.wasmCode));
+				// 	mode = #install;
+				// 	canister_id = Option.unwrap(opt.canisterId);
+				// });
+				opt.canisterId
+			};
+
+			case (#UninstallCode) {
+				await ic.uninstall_code({
+					canister_id = Option.unwrap(opt.canisterId);
+				});
+				opt.canisterId
+			};
+
+			case (#StartCanister) {
+				await ic.start_canister({
+					canister_id = Option.unwrap(opt.canisterId);
+				});
+				opt.canisterId
+			};
+
+			case (#StopCanister) {
+				await ic.stop_canister({
+					canister_id = Option.unwrap(opt.canisterId);
+				});
+				opt.canisterId
+			};
+
+			case (#DeleteCanister) {
+				await ic.delete_canister({
+					canister_id = Option.unwrap(opt.canisterId);
+				});
+				opt.canisterId
+			};
+		};
+	};
+
 	public query func getApprovers() : async [Principal] {
     approvers;
   };
@@ -73,9 +147,9 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
   };
 
   public shared(msg) func createOpt(optType: Types.OptType, canisterId: ?Types.Canister, wasmCode: ?Blob) : async Types.Result<(Types.Opt), Text> {
-		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
-			case null { #err "only approver allowed" };
-			case (?_) {
+		// switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
+		// 	case null { #err "only approver allowed" };
+		// 	case (?_) {
 				nextOptId += 1;
 				let opt: Types.Opt = {
 					id = nextOptId;
@@ -86,9 +160,27 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 					sent = false;
 				};
 				saveOrUpdateOpt(nextOptId, opt);
+
+				if (isLimitCanister(canisterId)) {
+					nextProposalId += 1;
+					let proposal : Types.Proposal = {
+						id = nextProposalId;
+						name = "NewProposal";
+						quorum = _quorum;
+						canisterId = canisterId;
+						proposalType = #Limit;
+						end = Time.now() + 10000;
+						votesYes = 0;
+						votesNo = 0;
+						state = #open;
+						optId = ?nextOptId;
+					};
+					saveOrUpdateProposal(nextProposalId, proposal);
+				};
+
 				#ok(opt)
-			}
-		};
+		// 	}
+		// };
 	};
 
 		public shared(msg) func approve(id: Nat): async Types.Result<Types.Opt, Text> {
@@ -101,56 +193,16 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 				case null { return #err "Opt does not exist" };
 				case (?opt) {
 					if( opt.sent == true ) return #err "Opt already running";
+					if( isLimitCanister(opt.canisterId) ) return #err "Has been limited";
 
 					var updateOpt: Types.Opt = Types.buildAddApprove(opt);
 					saveOrUpdateApprovals(msg.caller, id, true);
 					if (updateOpt.approvals >= quorum) {
-						switch (opt.optType) {
-							case (#CreateCanister) {
-								Cycles.add(CYCLE_LIMIT);
-								let settings : IC.canister_settings =
-									{
-										freezing_threshold = null;
-										controllers = ?[Principal.fromActor(self)];
-										memory_allocation = null;
-										compute_allocation = null;
-									};
-
-								let result = await ic.create_canister({settings = ?settings});
-								updateOpt := Types.buildAddCanisterId(updateOpt, ?result.canister_id);
-							};
-
-							case (#InstallCode) {
-								await ic.install_code({
-									arg = [];
-									wasm_module = Blob.toArray(Option.unwrap(opt.wasmCode));
-									mode = #install;
-									canister_id = Option.unwrap(opt.canisterId);
-								});
-							};
-
-							case (#UninstallCode) {
-								await ic.uninstall_code({
-									canister_id = Option.unwrap(opt.canisterId);
-								});
-							};
-
-							case (#StartCanister) {
-								await ic.start_canister({
-									canister_id = Option.unwrap(opt.canisterId);
-								});
-							};
-
-							case (#StopCanister) {
-								await ic.stop_canister({
-									canister_id = Option.unwrap(opt.canisterId);
-								});
-							};
-
-							case (#DeleteCanister) {
-								await ic.delete_canister({
-									canister_id = Option.unwrap(opt.canisterId);
-								});
+						var cid = await executeOperation(updateOpt);
+						switch (cid){
+							case null {};
+							case (?_) {
+								updateOpt := Types.buildAddCanisterId(updateOpt, cid);
 							};
 						};
 						updateOpt := Types.buildConfirmApprove(updateOpt);
@@ -171,23 +223,21 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 			case null { return #err "only approver allowed" };
 			case (_) {};
 		};
-		// switch (Array.find(getProposals(), func(val : Types.Proposal) : Bool { Types.Canister.equal(val.canisterId, canisterId)} )) {
-		// 	case null { return #err "canister not exist" };
-		// 	case (_) {};
-		// };
 
 		nextProposalId += 1;
 		let proposal : Types.Proposal = {
 			id = nextProposalId;
 			name = name;
 			quorum = quorum;
-			canisterId = canisterId;
+			canisterId = ?canisterId;
 			proposalType = proposalType;
 			end = Time.now() + voteTime;
 			votesYes = 0;
 			votesNo = 0;
 			state = #open;
+			optId = ?0;
 		};
+
 		saveOrUpdateProposal(nextProposalId, proposal);
 		#ok(nextProposalId)
   };
@@ -225,7 +275,8 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 							end = proposal.end;
 							votesYes;
 							votesNo;
-							state
+							state;
+							optId = proposal.optId;
 					};
 					saveOrUpdateProposal(proposal.id, updatedProposal);
 					#ok(updatedProposal);
@@ -246,7 +297,34 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 				if (proposal.state == #succeeded) { return #err("Cannot execute proposal already executed"); };
 				if (proposal.state != #accepted) { return #err("Only the accepted state can be executed"); };
 
-				// todo do some stuff
+				switch (proposal.canisterId) {
+					case null {};
+					case (?cid) {
+						switch(proposal.proposalType) {
+							case (#Limit) {
+								saveLimitCanister(cid, true);
+							};
+							case (#UnLimit) {
+								saveLimitCanister(cid, false);
+							};
+						};
+					};
+				};
+
+				switch (proposal.optId) {
+					case null {};
+					case (?optId) {
+						switch(getOptsById(optId)) {
+							case null {};
+							case (?opt) {
+								var cid = await executeOperation(opt);
+								var updateOpt = Types.buildAddCanisterId(opt, cid);
+								saveOrUpdateOpt(opt.id, updateOpt);
+							};
+						};
+					};
+				};
+
 				let updatedProposal: Types.Proposal = {
 					id = proposal.id;
 					name = proposal.name;
@@ -257,6 +335,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 					votesYes = proposal.votesYes;
 					votesNo = proposal.votesNo;
 					state = #succeeded;
+					optId = proposal.optId;
 				};
 				saveOrUpdateProposal(proposal.id, updatedProposal);
 				#ok();

@@ -19,12 +19,13 @@ module {
     id: ID;
     name: Text;
 		quorum: Nat;
-		canisterId: Canister;
+		canisterId: ?Canister;
 		proposalType: ProposalType;
     end: Time.Time;
 		votesYes: Nat;
 		votesNo: Nat;
 		state: ProposalState;
+		optId: ?ID;
   };
 
 	public type Vote = {

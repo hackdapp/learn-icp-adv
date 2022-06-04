@@ -37,7 +37,7 @@ ic-repl ./tests/proposal.test.sh
 
 1) 发布合约
 ```
-dfx deploy multisig_wallet --argument "(vec { (principal \""$(dfx identity get-principal)"\"); (principal \"syfdf-ycn55-kwkqy-mtr2i-kgztn-i2im2-gan2x-vq2zb-hocqg-k44bc-hae\")}, 2)"
+dfx deploy multisig_wallet --argument "(vec { (principal \""$(dfx identity get-principal)"\"); (principal \"syfdf-ycn55-kwkqy-mtr2i-kgztn-i2im2-gan2x-vq2zb-hocqg-k44bc-hae\")}, 1)"
 
 dfx deploy multisig_wallet --argument "(vec { (principal \""$(dfx identity get-principal)"\"); },2)"
 ```
@@ -70,5 +70,22 @@ dfx canister --network ic call multisig_wallet vote "(1, variant{\"yes\"})"
 dfx canister --network ic call multisig_wallet executeProposal "(1)"
 
 dfx canister --network ic call multisig_wallet getProposals "()"
+```
+
+```
+dfx canister call multisig_wallet createProposal "(\"TestProposal-001\", (principal \"2tyii-jyaaa-aaaaa-aab5a-cai\"), 1000, variant {\"Limit\"}, 1)"
+
+dfx identity use default
+dfx canister call multisig_wallet vote "(1, variant{\"yes\"})"
+
+dfx identity use registered_owner
+dfx canister call multisig_wallet vote "(1, variant{\"yes\"})"
+
+dfx canister call multisig_wallet executeProposal "(1)"
+
+dfx canister call multisig_wallet getProposals "()"
+
+
+dfx canister call multisig_wallet createOpt "(variant {\"InstallCode\"}, (principal \"2tyii-jyaaa-aaaaa-aab5a-cai\"), null)"
 ```
 

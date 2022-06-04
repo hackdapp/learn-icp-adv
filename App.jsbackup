@@ -1,0 +1,221 @@
+import React, { useEffect, useState } from 'react';
+import { FaBattleNet } from 'react-icons/fa';
+import { VscCopy, VscCloudDownload, VscDebugStart } from "react-icons/vsc";
+import { post } from './utils/http';
+import CodeMirror from '@uiw/react-codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+const solidityExampleCode = `pragma solidity ^0.4.17;
+
+contract Gift_1_ETH
+{
+
+    bool passHasBeenSet = false;
+    bytes32 public hashPass;
+    constructor()payable{}
+
+    function SetPass(bytes32 hash)
+    payable
+    {
+        if(!passHasBeenSet&&(msg.value >= 1 ether))
+        {
+            hashPass = hash;
+        }
+    }
+
+    function GetGift(bytes pass) returns (bytes32)
+    {
+
+        if( hashPass == sha3(pass))
+        {
+            msg.sender.transfer(this.balance);
+        }
+        return sha3(pass);
+    }
+
+    function PassHasBeenSet(bytes32 hash)
+    {
+        if(hash==hashPass)
+        {
+           passHasBeenSet=true;
+        }
+    }
+}
+`;
+
+const downloadFile = (fileName, content) => {
+	const element = document.createElement("a");
+	const file = new Blob([content], {
+		type: "text/plain"
+	});
+	element.href = URL.createObjectURL(file);
+	element.download = fileName;
+	document.body.appendChild(element);
+	element.click();
+};
+
+function App() {
+	const [editorContent, setEditorContent] = useState('');
+	const [machineContent, setMachineContent] = useState('');
+	const [contextContent, setContextContent] = useState('');
+
+	const dwnMachine = () => {
+		downloadFile('machine.txt', machineContent);
+	}
+
+	const copyMachine = async () => {
+		await navigator.clipboard.writeText(machineContent);
+		toast.info('Copied code to clipboard!', {
+			position: "bottom-right",
+			autoClose: 1000,
+			hideProgressBar: false,
+			closeOnClick: true,
+			pauseOnHover: false,
+			draggable: false,
+			progress: undefined,
+		});
+	}
+
+	const dwnContext = () => {
+		downloadFile('context.txt', contextContent);
+	}
+
+	const copyContext = async () => {
+		await navigator.clipboard.writeText(contextContent);
+		toast.info('Copied code to clipboard!', {
+			position: "bottom-right",
+			autoClose: 1000,
+			hideProgressBar: false,
+			closeOnClick: true,
+			pauseOnHover: false,
+			draggable: false,
+			progress: undefined,
+		});
+	}
+
+	const compile = async () => {
+		await post('/api/v1/ide/compile', editorContent).then((res) => {
+			res.forEach((item) => {
+				if (item.type === 'EB_MACHINE') {
+					setMachineContent(item.fileContent);
+				} else if (item.type === 'EB_CONTEXT') {
+					setContextContent(item.fileContent);
+				}
+			})
+		}, (err) => {
+			console.log(err)
+		})
+  };
+
+	useEffect(
+		() => {
+			setEditorContent(solidityExampleCode)
+		},
+		[]
+	);
+
+  return (
+		<div className="bg-gray-100 flex flex-col h-screen justify-between">
+			<nav className="flex-1 flex h-16 shadow-lg justify-between items-center space-x-8 bg-white text-gray-800 px-5 py-3 text-sm fixed top-0 left-0 right-0 z-10">
+				<div className="flex items-center space-x-4">
+					<FaBattleNet size="28" />
+					<h1 className="text-title text-2xl font-medium">FVT Studio IDE</h1>
+				</div>
+			</nav>
+			<div className="bg-white flex flex-col items-center mt-16 space-y-5 p-12 flex-grow h-full max-h-full">
+					<div>
+						<h1 className="h-4 text-xl text-gray-800 tracking-wider font-bold"># Online Studio IDE (Solidity to EventB)</h1>
+						<span></span>
+					</div>
+
+					<div className="h-auto rounded-md p-2 w-full bg-neutral-100" >
+						<CodeMirror
+							autoFocus="true"
+							value={editorContent}
+							height="400px"
+							width="100%"
+							extensions={[javascript({ jsx: true })]}
+							onChange={(value, viewUpdate) => {
+								setEditorContent(value)
+							}}
+						/>
+					</div>
+					<div>
+						<button onClick={compile} type="button" className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center inline-flex items-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+							<VscDebugStart size="24"/>
+							Compile
+						</button>
+					</div>
+					<div className="flex flex-col w-full">
+						<div className="border-b-2 border-gray-300 mb-4 mt-6">
+							<h2 className="text-xl font-bold">Result</h2>
+						</div>
+						<div className="flex flex-row justify-between w-full space-x-4">
+							<div className="flex-1 rounded-md p-2 bg-neutral-100 w-1/2" >
+								<h3 className="text-md font-bold text-gray-600 py-1">MachineFile</h3>
+								<CodeMirror
+									readOnly="true"
+									editable="false"
+									value={machineContent}
+									height="120px"
+									width="100%"
+									onChange={(value, viewUpdate) => {
+										setMachineContent(value);
+									}}
+								/>
+								<div className="mt-3 flex justify-end">
+									<button onClick={copyMachine} type="button" className="text-white bg-gray-400 hover:bg-gray-800 focus:ring-4 focus:outline-none focus:ring-gray-300 font-medium rounded-md text-sm px-3 py-2 text-center inline-flex items-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+										<VscCopy size="20"/>
+										Copy
+									</button>
+									<button onClick={dwnMachine} type="button" className="text-white bg-gray-400 hover:bg-gray-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-md text-sm px-3 py-2 text-center inline-flex items-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+										<VscCloudDownload size="20"/>
+										Download
+									</button>
+								</div>
+							</div>
+							<div className="flex-1 rounded-md p-2  bg-neutral-100 w-1/2" >
+								<h3 className="text-md font-bold text-gray-600 py-1">ContextFile</h3>
+								<CodeMirror
+									readOnly="true"
+									editable="false"
+									value={contextContent}
+									height="120px"
+									width="100%"
+									mode='javascript'
+									onChange={(value, viewUpdate) => {
+										setContextContent(value);
+									}}
+								/>
+								<div className="mt-3 flex justify-end">
+									<button onClick={copyContext}  type="button" className="text-white bg-gray-400 hover:bg-gray-800 focus:ring-4 focus:outline-none focus:ring-gray-300 font-medium rounded-md text-sm px-3 py-2 text-center inline-flex items-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+										<VscCopy size="20"/>
+										Copy
+									</button>
+									<button onClick={dwnContext} type="button" className="text-white bg-gray-400 hover:bg-gray-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-md text-sm px-3 py-2 text-center inline-flex items-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+										<VscCloudDownload size="20"/>
+										Download
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+			</div>
+			<div className="bg-gray-100 pt-2">
+				<div className="flex pb-5 px-3 m-auto pt-5 border-t text-gray-800 text-sm flex-col md:flex-row max-w-6xl">
+					<div className="mt-2">© Copyright 2020. All Rights Reserved.</div>
+					<div className="md:flex-auto md:flex-row-reverse mt-2 flex-row flex">
+						<a href="/#" className="w-6 mx-1">
+							{/* <FaTwitter size="20"></FaTwitter> */}
+						</a>
+					</div>
+				</div>
+			</div>
+			<ToastContainer />
+		</div>
+  );
+}
+
+export default App;

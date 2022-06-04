@@ -1,0 +1,85 @@
+type anon_class_16_1 = 
+ service {
+   approve: (nat) -> (Result_3);
+   createOpt: (OptType, opt Canister, opt blob) -> (Result_3);
+   createProposal: (text, Canister, Time, ProposalType, nat) -> (Result_2);
+   executeProposal: (ID) -> (Result_1);
+   getApprovers: () -> (vec principal) query;
+   getOpts: () -> (vec Opt) query;
+   getProposals: () -> (vec Proposal) query;
+   vote: (nat, Vote) -> (Result);
+ };
+type Vote = 
+ variant {
+   no;
+   yes;
+ };
+type Time = int;
+type Result_3 = 
+ variant {
+   err: text;
+   ok: Opt;
+ };
+type Result_2 = 
+ variant {
+   err: text;
+   ok: ID;
+ };
+type Result_1 = 
+ variant {
+   err: text;
+   ok;
+ };
+type Result = 
+ variant {
+   err: text;
+   ok: Proposal;
+ };
+type ProposalType = 
+ variant {
+   Limit;
+   UnLimit;
+ };
+type ProposalState = 
+ variant {
+   accepted;
+   executing;
+   failed: text;
+   open;
+   rejected;
+   succeeded;
+ };
+type Proposal = 
+ record {
+   canisterId: opt Canister;
+   end: Time;
+   id: ID;
+   name: text;
+   optId: opt ID;
+   proposalType: ProposalType;
+   quorum: nat;
+   state: ProposalState;
+   votesNo: nat;
+   votesYes: nat;
+ };
+type OptType = 
+ variant {
+   CreateCanister;
+   DeleteCanister;
+   InstallCode;
+   StartCanister;
+   StopCanister;
+   UninstallCode;
+ };
+type Opt = 
+ record {
+   approvals: nat;
+   canisterId: opt Canister;
+   id: nat;
+   optType: OptType;
+   sent: bool;
+   wasmCode: opt blob;
+ };
+type ID = nat;
+type Canister = principal;
+service : (vec principal, nat) -> anon_class_16_1

@@ -5,6 +5,19 @@
     "multisig_wallet": {
       "type": "motoko",
       "main": "src/multisig_wallet/main.mo"
+    },
+		"multisig_wallet_assets": {
+      "dependencies": [
+        "multisig_wallet"
+      ],
+      "frontend": {
+        "entrypoint": "src/multisig_wallet_assets/src/index.html"
+      },
+      "source": [
+        "src/multisig_wallet_assets/assets",
+        "dist/multisig_wallet_assets/"
+      ],
+      "type": "assets"
     }
   },
   "defaults": {
