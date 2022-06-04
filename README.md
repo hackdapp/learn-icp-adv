@@ -43,16 +43,16 @@ dfx deploy multisig_wallet --argument "(vec { (principal \""$(dfx identity get-p
 
 2) 创建操作
 ```
-dfx canister call multisig_wallet createOpt "(variant {\"CreateCanister\"}, null, null)"
+dfx canister --network ic call multisig_wallet createOpt "(variant {\"CreateCanister\"}, null, null)"
 ```
 
 3) 操作许可
 ```
 dfx identity use default
-dfx canister call multisig_wallet approve "(1)"
+dfx canister --network ic  call multisig_wallet approve "(1)"
 
 dfx identity use registered_owner
-dfx canister call multisig_wallet approve "(1)"
+dfx canister  --network ic call multisig_wallet approve "(1)"
 ```
 
 4) 创建提案

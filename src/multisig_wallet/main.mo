@@ -99,12 +99,12 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 			};
 
 			case (#InstallCode) {
-				// await ic.install_code({
-				// 	arg = [];
-				// 	wasm_module = Blob.toArray(Option.unwrap(opt.wasmCode));
-				// 	mode = #install;
-				// 	canister_id = Option.unwrap(opt.canisterId);
-				// });
+				await ic.install_code({
+					arg = [];
+					wasm_module = Blob.toArray(Option.unwrap(opt.wasmCode));
+					mode = #install;
+					canister_id = Option.unwrap(opt.canisterId);
+				});
 				opt.canisterId
 			};
 
@@ -147,9 +147,9 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
   };
 
   public shared(msg) func createOpt(optType: Types.OptType, canisterId: ?Types.Canister, wasmCode: ?Blob) : async Types.Result<(Types.Opt), Text> {
-		// switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
-		// 	case null { #err "only approver allowed" };
-		// 	case (?_) {
+		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
+			case null { #err "only approver allowed" };
+			case (?_) {
 				nextOptId += 1;
 				let opt: Types.Opt = {
 					id = nextOptId;
@@ -179,8 +179,8 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 				};
 
 				#ok(opt)
-		// 	}
-		// };
+			}
+		};
 	};
 
 		public shared(msg) func approve(id: Nat): async Types.Result<Types.Opt, Text> {

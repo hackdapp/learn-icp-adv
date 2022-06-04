@@ -1,6 +1,8 @@
 {
-  "multisig_wallet": {},
+  "multisig_wallet": {
+    "ic": "a5to3-viaaa-aaaal-qa4yq-cai"
+  },
   "multisig_wallet_assets": {
-    "ic": "a2sip-yqaaa-aaaal-qa4ya-cai"
+    "ic": "auqfh-daaaa-aaaal-qa4za-cai"
   }
 }
