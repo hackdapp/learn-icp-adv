@@ -151,6 +151,14 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 			case null { #err "only approver allowed" };
 			case (?_) {
 				nextOptId += 1;
+
+				var wasmCodeHash : [Nat8] = [];
+				switch(wasmCode){
+					case null {};
+					case (?val) {
+						wasmCodeHash := SHA256.sha256(Blob.toArray(Option.unwrap(wasmCode)));
+					};
+				};
 				let opt: Types.Opt = {
 					id = nextOptId;
 					wasmCode;
@@ -158,6 +166,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 					canisterId;
 					approvals = 0;
 					sent = false;
+					wasmCodeHash = wasmCodeHash;
 				};
 				saveOrUpdateOpt(nextOptId, opt);
 

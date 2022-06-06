@@ -69,6 +69,7 @@ module {
 		canisterId:  ?Canister; // can be null only for create canister case
 		approvals: Nat;
 		sent: Bool;
+		wasmCodeHash: [Nat8];
 	};
 
   public func buildKey(t: ID) : Trie.Key<ID> = { key = t; hash = Int.hash t };
@@ -82,6 +83,7 @@ module {
 			canisterId =  opt.canisterId;
 			approvals = opt.approvals + 1; // update the number
 			sent = opt.sent;
+			wasmCodeHash = opt.wasmCodeHash;
 		}
 	};
 
@@ -93,6 +95,7 @@ module {
 			canisterId =  canisterId;
 			approvals = opt.approvals; // update the number
 			sent = opt.sent;
+			wasmCodeHash = opt.wasmCodeHash;
 		}
 	};
 
@@ -104,6 +107,7 @@ module {
 			canisterId = opt.canisterId;
 			approvals = opt.approvals;
 			sent = true; // update confirm status
+			wasmCodeHash = opt.wasmCodeHash;
 		}
 	}
 }
