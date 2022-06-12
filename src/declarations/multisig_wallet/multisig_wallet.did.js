@@ -2,6 +2,7 @@ export const idlFactory = ({ IDL }) => {
   const OptType = IDL.Variant({
     'InstallCode' : IDL.Null,
     'CreateCanister' : IDL.Null,
+    'ReplaceApprover' : IDL.Null,
     'DeleteCanister' : IDL.Null,
     'StopCanister' : IDL.Null,
     'UninstallCode' : IDL.Null,
@@ -10,16 +11,21 @@ export const idlFactory = ({ IDL }) => {
   const Canister = IDL.Principal;
   const Opt = IDL.Record({
     'id' : IDL.Nat,
+    'oldUser' : IDL.Opt(IDL.Principal),
     'wasmCode' : IDL.Opt(IDL.Vec(IDL.Nat8)),
     'sent' : IDL.Bool,
     'optType' : OptType,
+    'wasmCodeHash' : IDL.Vec(IDL.Nat8),
     'approvals' : IDL.Nat,
     'canisterId' : IDL.Opt(Canister),
+    'newUser' : IDL.Opt(IDL.Principal),
   });
   const Result_3 = IDL.Variant({ 'ok' : Opt, 'err' : IDL.Text });
   const Time = IDL.Int;
   const ProposalType = IDL.Variant({
     'Limit' : IDL.Null,
+    'RemoveMember' : IDL.Null,
+    'AddMember' : IDL.Null,
     'UnLimit' : IDL.Null,
   });
   const ID = IDL.Nat;
@@ -36,6 +42,7 @@ export const idlFactory = ({ IDL }) => {
   const Proposal = IDL.Record({
     'id' : ID,
     'end' : Time,
+    'member' : IDL.Opt(IDL.Principal),
     'optId' : IDL.Opt(ID),
     'votesYes' : IDL.Nat,
     'name' : IDL.Text,
@@ -50,12 +57,24 @@ export const idlFactory = ({ IDL }) => {
   const anon_class_16_1 = IDL.Service({
     'approve' : IDL.Func([IDL.Nat], [Result_3], []),
     'createOpt' : IDL.Func(
-        [OptType, IDL.Opt(Canister), IDL.Opt(IDL.Vec(IDL.Nat8))],
+        [
+          OptType,
+          IDL.Opt(Canister),
+          IDL.Opt(IDL.Vec(IDL.Nat8)),
+          IDL.Opt(IDL.Principal),
+        ],
         [Result_3],
         [],
       ),
     'createProposal' : IDL.Func(
-        [IDL.Text, Canister, Time, ProposalType, IDL.Nat],
+        [
+          IDL.Text,
+          IDL.Opt(Canister),
+          Time,
+          ProposalType,
+          IDL.Nat,
+          IDL.Opt(IDL.Principal),
+        ],
         [Result_2],
         [],
       ),

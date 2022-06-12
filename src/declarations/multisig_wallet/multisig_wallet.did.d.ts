@@ -5,14 +5,18 @@ export type Canister = Principal;
 export type ID = bigint;
 export interface Opt {
   'id' : bigint,
+  'oldUser' : [] | [Principal],
   'wasmCode' : [] | [Array<number>],
   'sent' : boolean,
   'optType' : OptType,
+  'wasmCodeHash' : Array<number>,
   'approvals' : bigint,
   'canisterId' : [] | [Canister],
+  'newUser' : [] | [Principal],
 }
 export type OptType = { 'InstallCode' : null } |
   { 'CreateCanister' : null } |
+  { 'ReplaceApprover' : null } |
   { 'DeleteCanister' : null } |
   { 'StopCanister' : null } |
   { 'UninstallCode' : null } |
@@ -20,6 +24,7 @@ export type OptType = { 'InstallCode' : null } |
 export interface Proposal {
   'id' : ID,
   'end' : Time,
+  'member' : [] | [Principal],
   'optId' : [] | [ID],
   'votesYes' : bigint,
   'name' : string,
@@ -36,6 +41,8 @@ export type ProposalState = { 'open' : null } |
   { 'failed' : string } |
   { 'succeeded' : null };
 export type ProposalType = { 'Limit' : null } |
+  { 'RemoveMember' : null } |
+  { 'AddMember' : null } |
   { 'UnLimit' : null };
 export type Result = { 'ok' : Proposal } |
   { 'err' : string };
@@ -51,11 +58,11 @@ export type Vote = { 'no' : null } |
 export interface anon_class_16_1 {
   'approve' : ActorMethod<[bigint], Result_3>,
   'createOpt' : ActorMethod<
-    [OptType, [] | [Canister], [] | [Array<number>]],
+    [OptType, [] | [Canister], [] | [Array<number>], [] | [Principal]],
     Result_3,
   >,
   'createProposal' : ActorMethod<
-    [string, Canister, Time, ProposalType, bigint],
+    [string, [] | [Canister], Time, ProposalType, bigint, [] | [Principal]],
     Result_2,
   >,
   'executeProposal' : ActorMethod<[ID], Result_1>,

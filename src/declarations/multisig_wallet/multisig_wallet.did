@@ -1,8 +1,9 @@
 type anon_class_16_1 = 
  service {
    approve: (nat) -> (Result_3);
-   createOpt: (OptType, opt Canister, opt blob) -> (Result_3);
-   createProposal: (text, Canister, Time, ProposalType, nat) -> (Result_2);
+   createOpt: (OptType, opt Canister, opt blob, opt principal) -> (Result_3);
+   createProposal: (text, opt Canister, Time, ProposalType, nat,
+    opt principal) -> (Result_2);
    executeProposal: (ID) -> (Result_1);
    getApprovers: () -> (vec principal) query;
    getOpts: () -> (vec Opt) query;
@@ -37,7 +38,9 @@ type Result =
  };
 type ProposalType = 
  variant {
+   AddMember;
    Limit;
+   RemoveMember;
    UnLimit;
  };
 type ProposalState = 
@@ -54,6 +57,7 @@ type Proposal =
    canisterId: opt Canister;
    end: Time;
    id: ID;
+   member: opt principal;
    name: text;
    optId: opt ID;
    proposalType: ProposalType;
@@ -67,6 +71,7 @@ type OptType =
    CreateCanister;
    DeleteCanister;
    InstallCode;
+   ReplaceApprover;
    StartCanister;
    StopCanister;
    UninstallCode;
@@ -76,9 +81,12 @@ type Opt =
    approvals: nat;
    canisterId: opt Canister;
    id: nat;
+   newUser: opt principal;
+   oldUser: opt principal;
    optType: OptType;
    sent: bool;
    wasmCode: opt blob;
+   wasmCodeHash: vec nat8;
  };
 type ID = nat;
 type Canister = principal;

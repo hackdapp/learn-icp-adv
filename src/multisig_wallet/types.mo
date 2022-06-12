@@ -26,6 +26,7 @@ module {
 		votesNo: Nat;
 		state: ProposalState;
 		optId: ?ID;
+		member: ?Principal;
   };
 
 	public type Vote = {
@@ -51,6 +52,8 @@ module {
   public type ProposalType = {
     #Limit;
     #UnLimit;
+		#AddMember;
+		#RemoveMember;
   };
 
 	public type OptType = {
@@ -60,6 +63,7 @@ module {
 		#StartCanister;
 		#StopCanister;
 		#DeleteCanister;
+		#ReplaceApprover;
 	};
 
 	public type Opt = {
@@ -70,6 +74,8 @@ module {
 		approvals: Nat;
 		sent: Bool;
 		wasmCodeHash: [Nat8];
+		newUser: ?Principal;
+		oldUser: ?Principal;
 	};
 
   public func buildKey(t: ID) : Trie.Key<ID> = { key = t; hash = Int.hash t };
@@ -84,6 +90,8 @@ module {
 			approvals = opt.approvals + 1; // update the number
 			sent = opt.sent;
 			wasmCodeHash = opt.wasmCodeHash;
+			newUser = opt.newUser;
+			oldUser = opt.oldUser;
 		}
 	};
 
@@ -96,6 +104,8 @@ module {
 			approvals = opt.approvals; // update the number
 			sent = opt.sent;
 			wasmCodeHash = opt.wasmCodeHash;
+			newUser = opt.newUser;
+			oldUser = opt.oldUser;
 		}
 	};
 
@@ -106,8 +116,10 @@ module {
 			optType = opt.optType;
 			canisterId = opt.canisterId;
 			approvals = opt.approvals;
-			sent = true; // update confirm status
+			sent = true;
 			wasmCodeHash = opt.wasmCodeHash;
+			newUser = opt.newUser;
+			oldUser = opt.oldUser;
 		}
 	}
 }

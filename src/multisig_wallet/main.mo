@@ -126,7 +126,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 				await ic.stop_canister({
 					canister_id = Option.unwrap(opt.canisterId);
 				});
-				opt.canisterId
+					opt.canisterId
 			};
 
 			case (#DeleteCanister) {
@@ -135,6 +135,23 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 				});
 				opt.canisterId
 			};
+
+			case (#ReplaceApprover) {
+				switch (opt.oldUser) {
+					case (null)  {  };
+					case (?oldUser) {
+						var updated : [Principal] = [];
+						for (user : Principal in approvers.vals()) {
+							if (Principal.notEqual(user, oldUser)) {
+								updated := Array.append<Principal>(updated, [user]);
+							};
+						};
+						updated := Array.append<Principal>(updated, [Option.unwrap(opt.newUser)]);
+						approvers := updated;
+					}
+				};
+				opt.canisterId
+			}
 		};
 	};
 
@@ -146,7 +163,8 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 		Iter.toArray(Iter.map(Trie.iter(opts), func(kv: (Nat, Types.Opt)) : Types.Opt = kv.1));
   };
 
-  public shared(msg) func createOpt(optType: Types.OptType, canisterId: ?Types.Canister, wasmCode: ?Blob) : async Types.Result<(Types.Opt), Text> {
+  public shared(msg) func createOpt(optType: Types.OptType, canisterId: ?Types.Canister, wasmCode: ?Blob, newUser: ?Principal) : async Types.Result<(Types.Opt), Text> {
+		Debug.print(Principal.toText(msg.caller));
 		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
 			case null { #err "only approver allowed" };
 			case (?_) {
@@ -156,7 +174,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 				switch(wasmCode){
 					case null {};
 					case (?val) {
-						wasmCodeHash := SHA256.sha256(Blob.toArray(Option.unwrap(wasmCode)));
+						wasmCodeHash := Blob.toArray(Option.unwrap(wasmCode));
 					};
 				};
 				let opt: Types.Opt = {
@@ -167,6 +185,8 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 					approvals = 0;
 					sent = false;
 					wasmCodeHash = wasmCodeHash;
+					oldUser = ?msg.caller;
+					newUser;
 				};
 				saveOrUpdateOpt(nextOptId, opt);
 
@@ -183,6 +203,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 						votesNo = 0;
 						state = #open;
 						optId = ?nextOptId;
+						member = null;
 					};
 					saveOrUpdateProposal(nextProposalId, proposal);
 				};
@@ -227,7 +248,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 		Iter.toArray(Iter.map(Trie.iter(proposals), func (kv : (Nat, Types.Proposal)) : Types.Proposal = kv.1))
 	};
 
-  public shared(msg) func createProposal(name: Text, canisterId: Types.Canister, voteTime: Time.Time, proposalType: Types.ProposalType, quorum: Nat): async Types.Result<Types.ID, Text> {
+  public shared(msg) func createProposal(name: Text, canisterId: ?Types.Canister, voteTime: Time.Time, proposalType: Types.ProposalType, quorum: Nat, member: ?Principal): async Types.Result<Types.ID, Text> {
 		switch (Array.find(approvers, func(a: Principal) : Bool { Principal.equal(a, msg.caller) })) {
 			case null { return #err "only approver allowed" };
 			case (_) {};
@@ -238,13 +259,14 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 			id = nextProposalId;
 			name = name;
 			quorum = quorum;
-			canisterId = ?canisterId;
+			canisterId = canisterId;
 			proposalType = proposalType;
 			end = Time.now() + voteTime;
 			votesYes = 0;
 			votesNo = 0;
 			state = #open;
 			optId = ?0;
+			member = member;
 		};
 
 		saveOrUpdateProposal(nextProposalId, proposal);
@@ -286,6 +308,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 							votesNo;
 							state;
 							optId = proposal.optId;
+							member = proposal.member;
 					};
 					saveOrUpdateProposal(proposal.id, updatedProposal);
 					#ok(updatedProposal);
@@ -316,6 +339,34 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 							case (#UnLimit) {
 								saveLimitCanister(cid, false);
 							};
+							case (#AddMember) { // 添加成员
+							};
+							case (#RemoveMember) { // 减少成员
+							};
+						};
+					};
+				};
+
+				switch (proposal.member) {
+					case null {};
+					case (?_) {
+						switch(proposal.proposalType) {
+							case (#Limit) {
+							};
+							case (#UnLimit) {
+							};
+							case (#AddMember) { // 添加成员
+								approvers := Array.append<Principal>(approvers, [Option.unwrap(proposal.member)]);
+							};
+							case (#RemoveMember) { // 减少成员
+									var updated : [Principal] = [];
+									for (user : Principal in approvers.vals()) {
+										if (Principal.notEqual(user, Option.unwrap(proposal.member))) {
+											updated := Array.append<Principal>(updated, [user]);
+										};
+									};
+									approvers := updated;
+							};
 						};
 					};
 				};
@@ -345,6 +396,7 @@ actor class(_approvers: [Principal], _quorum : Nat) = self {
 					votesNo = proposal.votesNo;
 					state = #succeeded;
 					optId = proposal.optId;
+					member = proposal.member;
 				};
 				saveOrUpdateProposal(proposal.id, updatedProposal);
 				#ok();

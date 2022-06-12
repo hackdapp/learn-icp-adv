@@ -48,6 +48,7 @@
   "dependencies": {
     "@connect2ic/core": "^0.0.9",
     "@connect2ic/react": "^0.0.7",
+    "@dfinity/auth-client": "^0.11.3",
     "@psychedelic/plug-connect": "^0.1.4",
     "autoprefixer": "^10.4.7",
     "css-loader": "^6.7.1",
